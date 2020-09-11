@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -279,6 +280,7 @@ func login(ctx context.Context, cfg Config) (*api.Client, error) {
 
 	//token is missing from cache or expired
 	if token.Token == "" {
+		log.Print("Alex: New token from Vault")
 		//generate new token from Vault
 		token, err := getToken(ctx, cfg, vClient)
 		if err != nil {
@@ -313,6 +315,7 @@ func getVaultTokenFromCache(ctx context.Context, cfg Config, b *backoff.Exponent
 	}
 
 	if !isExpired(token, cfg) {
+		log.Print("Alex: Using token from cache")
 		return *token, nil
 	}
 	//token is expired
