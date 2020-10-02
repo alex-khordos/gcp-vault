@@ -302,7 +302,7 @@ func login(ctx context.Context, cfg Config) (*api.Client, error) {
 
 func getVaultTokenFromCache(ctx context.Context, cfg Config, b *backoff.ExponentialBackOff) (Token, error) {
 	var (
-		token *Token
+		token = new(Token)
 		err   error
 	)
 	err = backoff.Retry(func() error {
