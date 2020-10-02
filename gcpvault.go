@@ -311,6 +311,7 @@ func getVaultTokenFromCache(ctx context.Context, cfg Config, b *backoff.Exponent
 		token *Token
 		err   error
 	)
+	log.Printf("Alex max retries is %d", cfg.MaxRetries)
 	err = backoff.Retry(func() error {
 		token, err = cfg.TokenCache.GetToken(ctx)
 		return err
