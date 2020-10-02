@@ -302,7 +302,7 @@ func login(ctx context.Context, cfg Config) (*api.Client, error) {
 
 func getVaultTokenFromCache(ctx context.Context, cfg Config, b *backoff.ExponentialBackOff) (Token, error) {
 	var (
-		token = new(Token)
+		token *Token
 		err   error
 	)
 	err = backoff.Retry(func() error {
@@ -311,7 +311,7 @@ func getVaultTokenFromCache(ctx context.Context, cfg Config, b *backoff.Exponent
 	}, backoff.WithMaxRetries(b, uint64(cfg.MaxRetries)))
 
 	if err != nil {
-		return *token, errors.Wrapf(err, "unable to retrieve Vault token from cache after %d retries", cfg.MaxRetries)
+		return Token{}, errors.Wrapf(err, "unable to retrieve Vault token from cache after %d retries", cfg.MaxRetries)
 	}
 
 	if !isExpired(token, cfg) {
