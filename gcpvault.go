@@ -93,6 +93,7 @@ const (
 	CachedTokenRefreshThresholdDefault   = 300
 	TokenCacheCtxTimeoutDefault          = 30
 	TokenCacheRefreshRandomOffsetDefault = 60
+	TokenCacheMaxRetriesDefault          = 3
 	TokenCacheKeyNameDefault             = "token-cache"
 )
 
@@ -237,6 +238,11 @@ func checkDefaults(cfg *Config) error {
 	//if the token cache name is not set, use default
 	if cfg.TokenCacheKeyName == "" {
 		cfg.TokenCacheKeyName = TokenCacheKeyNameDefault
+	}
+
+	//if max retries is not set, use default
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = TokenCacheMaxRetriesDefault
 	}
 
 	if cfg.TokenCacheRefreshRandomOffset == 0 && cfg.TokenCacheRefreshThreshold > 0 {
