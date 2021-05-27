@@ -127,9 +127,9 @@ func GetSecrets(ctx context.Context, cfg Config) (map[string]interface{}, error)
 		return nil, err
 	}
 
-	vClient, jwt, err := login(ctx, cfg)
+	vClient, err := login(ctx, cfg)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to login to vault "+jwt)
+		return nil, errors.Wrap(err, "unable to login to vault")
 	}
 
 	// fetch secrets
@@ -155,7 +155,7 @@ func PutSecrets(ctx context.Context, cfg Config, secrets map[string]interface{})
 		return err
 	}
 
-	vClient, _, err := login(ctx, cfg)
+	vClient, err := login(ctx, cfg)
 	if err != nil {
 		return errors.Wrap(err, "unable to login to vault")
 	}
@@ -191,7 +191,7 @@ func PutVersionedSecrets(ctx context.Context, cfg Config, secrets map[string]int
 		return err
 	}
 
-	vClient, _, err := login(ctx, cfg)
+	vClient, err := login(ctx, cfg)
 	if err != nil {
 		return errors.Wrap(err, "unable to login to vault")
 	}
@@ -261,14 +261,14 @@ func checkDefaults(cfg *Config) error {
 	return nil
 }
 
-func login(ctx context.Context, cfg Config) (*api.Client, string, error) {
+func login(ctx context.Context, cfg Config) (*api.Client, error) {
 	if cfg.LocalToken != "" {
 		return newLocalClient(ctx, cfg)
 	}
 
 	vClient, err := newClient(ctx, cfg)
 	if err != nil {
-		return nil, "", errors.Wrap(err, "unable to init vault client")
+		return nil, errors.Wrap(err, "unable to init vault client")
 	}
 
 	timeout := time.Duration(cfg.TokenCacheCtxTimeout)
@@ -283,28 +283,28 @@ func login(ctx context.Context, cfg Config) (*api.Client, string, error) {
 	}
 	//an error with gcs or redis
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	//token is missing from cache or expired
 	if token.Token == "" {
 		//generate new token from Vault
-		token, jwt, err := getToken(ctx, cfg, vClient)
+		token, err := getToken(ctx, cfg, vClient)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 
 		vClient.SetToken(token.Auth.ClientToken)
 		//save to cache
 		err = persistVaultTokenToCache(ctx, cfg, token, b)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		return vClient, jwt, nil
+		return vClient, nil
 	}
 
 	vClient.SetToken(token.Token)
-	return vClient, "", nil
+	return vClient, nil
 }
 
 func getVaultTokenFromCache(ctx context.Context, cfg Config, b *backoff.ExponentialBackOff) (Token, error) {
@@ -349,12 +349,12 @@ func persistVaultTokenToCache(ctx context.Context, cfg Config, token *api.Secret
 	return nil
 }
 
-func getToken(ctx context.Context, cfg Config, vClient *api.Client) (*api.Secret, string, error) {
+func getToken(ctx context.Context, cfg Config, vClient *api.Client) (*api.Secret, error) {
 
 	// create signed JWT with our service account
 	jwt, err := newJWT(ctx, cfg)
 	if err != nil {
-		return nil, "", errors.Wrap(err, "unable to create JWT")
+		return nil, errors.Wrap(err, "unable to create JWT")
 	}
 
 	// 'login' to vault using GCP auth
@@ -362,10 +362,10 @@ func getToken(ctx context.Context, cfg Config, vClient *api.Client) (*api.Secret
 		"role": cfg.Role, "jwt": jwt,
 	})
 	if err != nil {
-		return nil, "", errors.Wrap(err, "unable to make login request")
+		return nil, errors.Wrap(err, "unable to make login request")
 	}
 
-	return resp, jwt, nil
+	return resp, nil
 }
 
 func newClient(ctx context.Context, cfg Config) (*api.Client, error) {
@@ -376,18 +376,18 @@ func newClient(ctx context.Context, cfg Config) (*api.Client, error) {
 	return api.NewClient(vcfg)
 }
 
-func newLocalClient(ctx context.Context, cfg Config) (*api.Client, string, error) {
+func newLocalClient(ctx context.Context, cfg Config) (*api.Client, error) {
 	vcfg := api.DefaultConfig()
 	vcfg.Address = cfg.VaultAddress
 	vcfg.HttpClient = getHTTPClient(ctx, cfg)
 	vClient, err := api.NewClient(vcfg)
 	if err != nil {
-		return nil, "", errors.Wrap(err, "unable to init vault client")
+		return nil, errors.Wrap(err, "unable to init vault client")
 	}
 
 	vClient.SetToken(cfg.LocalToken)
 
-	return vClient, "", nil
+	return vClient, nil
 }
 
 func newJWT(ctx context.Context, cfg Config) (string, error) {
