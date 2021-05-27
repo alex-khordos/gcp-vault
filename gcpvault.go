@@ -412,7 +412,7 @@ func newJWT(ctx context.Context, cfg Config) (string, error) {
 
 // created JWT should match https://www.vaultproject.io/docs/auth/gcp.html#the-iam-authentication-token
 func newJWTBase(ctx context.Context, cfg Config) (string, error) {
-	serviceAccount, _, tokenSource, err := getServiceAccountInfo(ctx, cfg)
+	serviceAccount, tokenSource, err := getServiceAccountInfo(ctx, cfg)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to get service account from environment")
 	}
@@ -456,6 +456,8 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "unable to sign JWT")
 	}
+	println(fmt.Sprint(data["signedJwt"]))
+
 	jwt := fmt.Sprint(data["signedJwt"])
 
 	return jwt, nil
@@ -463,25 +465,25 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 
 var findDefaultCredentials = google.FindDefaultCredentials
 
-func getServiceAccountInfo(ctx context.Context, cfg Config) (string, string, oauth2.TokenSource, error) {
+func getServiceAccountInfo(ctx context.Context, cfg Config) (string, oauth2.TokenSource, error) {
 	creds, err := findDefaultCredentials(ctx, iam.CloudPlatformScope)
 	if err != nil {
-		return "", "", nil, errors.Wrap(err, "unable to find credentials to sign JWT")
+		return "", nil, errors.Wrap(err, "unable to find credentials to sign JWT")
 	}
 
 	serviceAccountEmail, err := getEmailFromCredentials(creds)
 	if err != nil {
-		return "", "", nil, errors.Wrap(err, "unable to get email from given credentials")
+		return "", nil, errors.Wrap(err, "unable to get email from given credentials")
 	}
 
 	if serviceAccountEmail == "" {
 		serviceAccountEmail, err = getDefaultServiceAccountEmail(ctx, cfg)
 		if err != nil {
-			return "", "", nil, err
+			return "", nil, err
 		}
 	}
 
-	return serviceAccountEmail, creds.ProjectID, creds.TokenSource, nil
+	return serviceAccountEmail, creds.TokenSource, nil
 }
 
 func getEmailFromCredentials(creds *google.Credentials) (string, error) {
