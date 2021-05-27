@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -456,10 +457,9 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "unable to sign JWT")
 	}
-	println(fmt.Sprint(data["signedJwt"]))
 
 	jwt := fmt.Sprint(data["signedJwt"])
-
+	log.Printf("jwt: %s", jwt)
 	return jwt, nil
 }
 
