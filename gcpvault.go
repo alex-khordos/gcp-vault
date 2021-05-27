@@ -400,7 +400,6 @@ func newJWT(ctx context.Context, cfg Config) (string, error) {
 
 	err = backoff.Retry(func() error {
 		jwt, err = newJWTBase(ctx, cfg)
-		println("retry")
 		return err
 	}, backoff.WithMaxRetries(b, uint64(cfg.MaxRetries)))
 
@@ -444,7 +443,6 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	}
 
 	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(payload))
-	//println(resp.StatusCode)
 	if err != nil || resp.StatusCode != 200 {
 		return "", errors.Wrap(err, "unable to sign JWT")
 	}
@@ -460,7 +458,6 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	}
 	jwt := fmt.Sprint(data["signedJwt"])
 
-	println("jwt: " + jwt)
 	return jwt, nil
 }
 

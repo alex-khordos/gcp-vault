@@ -6,7 +6,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.0.0
 	github.com/gomodule/redigo v1.8.2
 	github.com/google/go-cmp v0.5.4
-	github.com/hashicorp/go-retryablehttp v0.5.4
 	github.com/hashicorp/vault/api v1.0.3
 	github.com/kelseyhightower/envconfig v1.3.0
 	github.com/pkg/errors v0.8.0
@@ -14,7 +13,6 @@ require (
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	google.golang.org/api v0.40.0
 	google.golang.org/appengine v1.6.7
-	google.golang.org/genproto v0.0.0-20201214200347-8c77b98c765d
 )
 
 go 1.13

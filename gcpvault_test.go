@@ -387,11 +387,9 @@ func TestGetSecrets(t *testing.T) {
 			}
 
 			iamSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				println("hit")
 				if test.wantIAMRetry {
 					test.wantIAMRetry = false
 					w.WriteHeader(http.StatusBadGateway)
-					//return
 				}
 				gotIAMHit = true
 				json.NewEncoder(w).Encode(iam.SignJwtResponse{
