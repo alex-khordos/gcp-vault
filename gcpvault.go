@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -444,7 +443,7 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	}
 
 	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(payload))
-	if err != nil || resp.StatusCode != 200 {
+	if err != nil {
 		return "", errors.Wrap(err, "unable to sign JWT")
 	}
 	body, readErr := ioutil.ReadAll(resp.Body)
@@ -459,7 +458,6 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	}
 
 	jwt := fmt.Sprint(data["signedJwt"])
-	log.Printf("jwt: %s", jwt)
 	return jwt, nil
 }
 
