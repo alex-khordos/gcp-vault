@@ -434,7 +434,7 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 		gcpURL = cfg.IAMAddress
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{
+	claim, err := json.Marshal(map[string]interface{}{
 		// "payload": map[string]interface{}{
 		"aud": "vault/" + cfg.Role,
 		"sub": serviceAccount,
@@ -444,6 +444,10 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "unable to encode JWT payload")
 	}
+
+	log.Println(string(claim))
+
+	payload := []byte("{payload: " + string(claim) + "}")
 
 	log.Println(string(payload))
 
