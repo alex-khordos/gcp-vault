@@ -449,7 +449,7 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	// var req bytes.Buffer
 	// json.HTMLEscape(&req, claim)
 
-	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(claim))
+	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		return "", errors.Wrap(err, "unable to POST")
 	}
