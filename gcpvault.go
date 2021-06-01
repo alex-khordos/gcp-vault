@@ -418,9 +418,11 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	}
 
 	payload, err := json.Marshal(map[string]interface{}{
-		"aud": "vault/" + cfg.Role,
-		"sub": serviceAccount,
-		"exp": time.Now().UTC().Add(5 * time.Minute).Unix(),
+		"payload": map[string]interface{}{
+			"aud": "vault/" + cfg.Role,
+			"sub": serviceAccount,
+			"exp": time.Now().UTC().Add(5 * time.Minute).Unix(),
+		},
 	})
 	if err != nil {
 		return "", errors.Wrap(err, "unable to encode JWT payload")
