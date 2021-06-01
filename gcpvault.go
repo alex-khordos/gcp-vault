@@ -436,7 +436,7 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 		},
 	}
 
-	gcpURL := "iamcredentials.googleapis.com/v1"
+	gcpURL := "https://iamcredentials.googleapis.com/v1"
 
 	if cfg.IAMAddress != "" {
 		gcpURL = cfg.IAMAddress
