@@ -435,25 +435,23 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	}
 
 	claim, err := json.Marshal(map[string]interface{}{
-		// "payload": map[string]interface{}{
 		"aud": "vault/" + cfg.Role,
 		"sub": serviceAccount,
 		"exp": time.Now().UTC().Add(5 * time.Minute).Unix(),
-		// },
 	})
+
 	if err != nil {
 		return "", errors.Wrap(err, "unable to encode JWT payload")
 	}
+	payload, _ := json.Marshal(string(claim))
+	log.Println("{payload:" + string(payload) + "}")
 
-	log.Println(string(claim))
+	// var req bytes.Buffer
+	// json.HTMLEscape(&req, claim)
 
-	payload := []byte("{payload: " + string(claim) + "}")
-
-	log.Println(string(payload))
-
-	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(payload))
+	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(claim))
 	if err != nil {
-		return "", errors.Wrap(err, "unable to sign JWT")
+		return "", errors.Wrap(err, "unable to POST")
 	}
 
 	defer resp.Body.Close()
@@ -465,13 +463,13 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 
 	log.Println(string(body))
 
-	var data map[string]interface{}
+	var data map[string]string
 	err = json.Unmarshal(body, &data)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to sign JWT")
 	}
 
-	jwt := fmt.Sprint(data["signedJwt"])
+	jwt := data["signedJwt"]
 	return jwt, nil
 }
 
