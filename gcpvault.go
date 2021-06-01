@@ -445,7 +445,9 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 	}
 	payload, _ := json.Marshal(string(claim))
 
-	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer("{\"payload\":"+string(payload)+"}"))
+	payloadString := []byte("{\"payload\":" + string(payload) + "}")
+
+	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(payloadString))
 	if err != nil {
 		return "", errors.Wrap(err, "unable to POST")
 	}
