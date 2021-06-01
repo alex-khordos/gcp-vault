@@ -16,7 +16,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/iam/v1"
 )
 
 // Config contains fields for configuring access and secrets retrieval from a Vault
@@ -470,7 +469,7 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 var findDefaultCredentials = google.FindDefaultCredentials
 
 func getServiceAccountInfo(ctx context.Context, cfg Config) (string, oauth2.TokenSource, error) {
-	creds, err := findDefaultCredentials(ctx, iam.CloudPlatformScope)
+	creds, err := findDefaultCredentials(ctx, `https://www.googleapis.com/auth/cloud-platform`)
 	if err != nil {
 		return "", nil, errors.Wrap(err, "unable to find credentials to sign JWT")
 	}
