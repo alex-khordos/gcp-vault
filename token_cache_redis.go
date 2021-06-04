@@ -18,8 +18,11 @@ func (t TokenCacheRedis) GetToken(ctx context.Context) (*Token, error) {
 
 		redisAddr := t.cfg.TokenCacheStorageRedis
 		tokenKey := t.cfg.TokenCacheKeyName
+		tokenDB := t.cfg.TokenCacheStorageRedisDB
+		opts := []redis.DialOption{redis.DialConnectTimeout(time.Second * time.Duration(t.cfg.TokenCacheCtxTimeout)), redis.DialDatabase(tokenDB)}
 
-		conn, err := redis.Dial("tcp", redisAddr, redis.DialConnectTimeout(time.Second*time.Duration(t.cfg.TokenCacheCtxTimeout)))
+		conn, err := redis.Dial("tcp", redisAddr, opts...)
+
 		if err != nil {
 			return nil, errors.Wrap(err, "error connecting")
 		}
@@ -27,7 +30,8 @@ func (t TokenCacheRedis) GetToken(ctx context.Context) (*Token, error) {
 
 		data, err := redis.String(conn.Do("GET", tokenKey))
 		if err != nil {
-			return nil, err
+			// swallowing the error here since we may not have cached a token yet
+			return nil, nil
 		}
 		var token Token
 		err = json.Unmarshal([]byte(data), &token)
@@ -47,7 +51,10 @@ func (t TokenCacheRedis) SaveToken(ctx context.Context, token Token) error {
 
 		redisAddr := t.cfg.TokenCacheStorageRedis
 		tokenKey := t.cfg.TokenCacheKeyName
-		conn, err := redis.Dial("tcp", redisAddr, redis.DialConnectTimeout(time.Second*time.Duration(t.cfg.TokenCacheCtxTimeout)))
+		tokenDB := t.cfg.TokenCacheStorageRedisDB
+		opts := []redis.DialOption{redis.DialConnectTimeout(time.Second * time.Duration(t.cfg.TokenCacheCtxTimeout)), redis.DialDatabase(tokenDB)}
+
+		conn, err := redis.Dial("tcp", redisAddr, opts...)
 
 		if err != nil {
 			return errors.Wrap(err, "Error connecting")

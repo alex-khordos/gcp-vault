@@ -1,9 +1,11 @@
 package gcpvault
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -14,7 +16,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/iam/v1"
 )
 
 // Config contains fields for configuring access and secrets retrieval from a Vault
@@ -76,6 +77,8 @@ type Config struct {
 	TokenCacheStorageGCS string `envconfig:"TOKEN_CACHE_STORAGE_GCS"`
 	// Host and port for Redis '10.200.30.4:6379'
 	TokenCacheStorageRedis string `envconfig:"TOKEN_CACHE_STORAGE_REDIS"`
+	//Database for Redis. Default is 0
+	TokenCacheStorageRedisDB int `envconfig:"TOKEN_CACHE_STORAGE_REDIS_DB"`
 }
 
 type TokenCache interface {
@@ -93,6 +96,7 @@ const (
 	TokenCacheCtxTimeoutDefault          = 30
 	TokenCacheRefreshRandomOffsetDefault = 60
 	TokenCacheKeyNameDefault             = "token-cache"
+	TokenCacheMaxRetriesDefault          = 3
 )
 
 // GetSecrets will use GCP Auth to access any secrets under the given SecretPath in
@@ -124,7 +128,7 @@ func GetSecrets(ctx context.Context, cfg Config) (map[string]interface{}, error)
 
 	vClient, err := login(ctx, cfg)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to login to vault")
+		return nil, errors.Wrap(err, "unable to login to vault ")
 	}
 
 	// fetch secrets
@@ -238,6 +242,11 @@ func checkDefaults(cfg *Config) error {
 		cfg.TokenCacheKeyName = TokenCacheKeyNameDefault
 	}
 
+	//if max retries is not set, use default
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = TokenCacheMaxRetriesDefault
+	}
+
 	if cfg.TokenCacheRefreshRandomOffset == 0 && cfg.TokenCacheRefreshThreshold > 0 {
 		// setting random offset to 1/2 of the refresh threshold
 		seconds := cfg.TokenCacheRefreshThreshold / 2
@@ -271,7 +280,6 @@ func login(ctx context.Context, cfg Config) (*api.Client, error) {
 	if cfg.TokenCache != nil {
 		token, err = getVaultTokenFromCache(ctx, cfg, b)
 	}
-
 	//an error with gcs or redis
 	if err != nil {
 		return nil, err
@@ -309,10 +317,10 @@ func getVaultTokenFromCache(ctx context.Context, cfg Config, b *backoff.Exponent
 	}, backoff.WithMaxRetries(b, uint64(cfg.MaxRetries)))
 
 	if err != nil {
-		return *token, errors.Wrapf(err, "unable to retrieve Vault token from cache after %d retries", cfg.MaxRetries)
+		return Token{}, errors.Wrapf(err, "unable to retrieve Vault token from cache after %d retries", cfg.MaxRetries)
 	}
 
-	if !isExpired(token, cfg) {
+	if !(isExpired(token, cfg) || isRevoked(ctx, cfg, token)) {
 		return *token, nil
 	}
 	//token is expired
@@ -403,18 +411,9 @@ func newJWT(ctx context.Context, cfg Config) (string, error) {
 
 // created JWT should match https://www.vaultproject.io/docs/auth/gcp.html#the-iam-authentication-token
 func newJWTBase(ctx context.Context, cfg Config) (string, error) {
-	serviceAccount, project, tokenSource, err := getServiceAccountInfo(ctx, cfg)
+	serviceAccount, tokenSource, err := getServiceAccountInfo(ctx, cfg)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to get service account from environment")
-	}
-
-	payload, err := json.Marshal(map[string]interface{}{
-		"aud": "vault/" + cfg.Role,
-		"sub": serviceAccount,
-		"exp": time.Now().UTC().Add(5 * time.Minute).Unix(),
-	})
-	if err != nil {
-		return "", errors.Wrap(err, "unable to encode JWT payload")
 	}
 
 	hc := getHTTPClient(ctx, cfg)
@@ -426,46 +425,68 @@ func newJWTBase(ctx context.Context, cfg Config) (string, error) {
 			Base:   hc.Transport,
 		},
 	}
-	iamClient, err := iam.New(hcIAM)
-	if err != nil {
-		return "", errors.Wrap(err, "unable to init IAM client")
-	}
+
+	gcpURL := "https://iamcredentials.googleapis.com/v1"
 
 	if cfg.IAMAddress != "" {
-		iamClient.BasePath = cfg.IAMAddress
+		gcpURL = cfg.IAMAddress
 	}
 
-	resp, err := iamClient.Projects.ServiceAccounts.SignJwt(
-		fmt.Sprintf("projects/%s/serviceAccounts/%s",
-			project, serviceAccount),
-		&iam.SignJwtRequest{Payload: string(payload)}).Context(ctx).Do()
+	claim, err := json.Marshal(map[string]interface{}{
+		"aud": "vault/" + cfg.Role,
+		"sub": serviceAccount,
+		"exp": time.Now().UTC().Add(5 * time.Minute).Unix(),
+	})
+
+	if err != nil {
+		return "", errors.Wrap(err, "unable to encode JWT payload")
+	}
+	payload, _ := json.Marshal(string(claim))
+
+	payloadString := []byte("{\"payload\":" + string(payload) + "}")
+
+	resp, err := hcIAM.Post(fmt.Sprintf(gcpURL+"/projects/-/serviceAccounts/%s:signJwt", serviceAccount), "application/json", bytes.NewBuffer(payloadString))
+	if err != nil {
+		return "", errors.Wrap(err, "unable to POST")
+	}
+
+	defer resp.Body.Close()
+
+	body, readErr := ioutil.ReadAll(resp.Body)
+	if readErr != nil {
+		return "", errors.Wrap(err, "unable to parse response")
+	}
+
+	var data map[string]string
+	err = json.Unmarshal(body, &data)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to sign JWT")
 	}
-	return resp.SignedJwt, nil
+
+	return data["signedJwt"], nil
 }
 
 var findDefaultCredentials = google.FindDefaultCredentials
 
-func getServiceAccountInfo(ctx context.Context, cfg Config) (string, string, oauth2.TokenSource, error) {
-	creds, err := findDefaultCredentials(ctx, iam.CloudPlatformScope)
+func getServiceAccountInfo(ctx context.Context, cfg Config) (string, oauth2.TokenSource, error) {
+	creds, err := findDefaultCredentials(ctx, `https://www.googleapis.com/auth/cloud-platform`)
 	if err != nil {
-		return "", "", nil, errors.Wrap(err, "unable to find credentials to sign JWT")
+		return "", nil, errors.Wrap(err, "unable to find credentials to sign JWT")
 	}
 
 	serviceAccountEmail, err := getEmailFromCredentials(creds)
 	if err != nil {
-		return "", "", nil, errors.Wrap(err, "unable to get email from given credentials")
+		return "", nil, errors.Wrap(err, "unable to get email from given credentials")
 	}
 
 	if serviceAccountEmail == "" {
 		serviceAccountEmail, err = getDefaultServiceAccountEmail(ctx, cfg)
 		if err != nil {
-			return "", "", nil, err
+			return "", nil, err
 		}
 	}
 
-	return serviceAccountEmail, creds.ProjectID, creds.TokenSource, nil
+	return serviceAccountEmail, creds.TokenSource, nil
 }
 
 func getEmailFromCredentials(creds *google.Credentials) (string, error) {
@@ -497,5 +518,18 @@ func isExpired(token *Token, cfg Config) bool {
 		return true
 	}
 
+	return false
+}
+
+func isRevoked(ctx context.Context, cfg Config, token *Token) bool {
+	vClient, err := newClient(ctx, cfg)
+	if err != nil {
+		return true
+	}
+	vClient.SetToken(token.Token)
+	_, err = vClient.Auth().Token().LookupSelf()
+	if err != nil {
+		return true
+	}
 	return false
 }
